@@ -32,7 +32,7 @@ MangaCoversClient.prototype.getCover = function(id, callback) {
 
     maxAttempts: 5,
     retryDelay: 10000,
-    retryStrategy: request.RetryStrategies.HTTPOrNetworkError    
+    retryStrategy: request.RetryStrategies.HTTPOrNetworkError
   };
 
   _this = this
@@ -51,7 +51,7 @@ MangaCoversClient.prototype.getCover = function(id, callback) {
 
     if (foundCovers.length > 0) {
       //console.log('Cover found for id:', id, foundCovers[0].Normal);
-      return callback(null, foundCovers[0].Normal);
+      return callback(null, {normal: foundCovers[0].Normal, thumbnail: foundCovers[0].Thumbnail });
     }
     else
       return callback("No cover for manga id: " + id);

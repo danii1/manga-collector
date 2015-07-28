@@ -74,7 +74,7 @@ MangaUpdatesClient.prototype.getManga = function(id, callback) {
 
     maxAttempts: 5,
     retryDelay: 10000,
-    retryStrategy: request.RetryStrategies.HTTPOrNetworkError    
+    retryStrategy: request.RetryStrategies.HTTPOrNetworkError
   };
 
   var parseMangaLink = function(context) {
@@ -94,11 +94,16 @@ MangaUpdatesClient.prototype.getManga = function(id, callback) {
     $ = cheerio.load(body);
 
     contentStrings = $('.sContent')
+    alternativeNames = [];
+    alternativeNamesHtml = contentStrings.eq(3).html();
+    if (alternativeNamesHtml != null)
+      alternativeNames = _.without(alternativeNamesHtml.split('<br>'), '', '\n')
+
     var manga = {
       id: id,
       title: $('.tabletitle').text().trim(),
       description: contentStrings.eq(0).text().trim(),
-      alternativeNames: _.without(contentStrings.eq(3).html().split('<br>'), '', '\n'),
+      alternativeNames: alternativeNames,
       categories: contentStrings.eq(14).find('a > u').map( function(index, element) {
         return $(this).text();
       }).get(),

@@ -21,55 +21,76 @@ if (typeof program.file === 'undefined') {
 parallelismLimit = 4;
 var operations = []
 
-operations.push(
-  // get all pages with manga
-  function(callback) {
-    mangaupdates.getSourcePages(callback);
-  },
-  // get manga on page, return array of manga on all pages
-  function(pages, callback) {
-    pages = pages.slice(0, 2);
-    async.mapLimit(pages, parallelismLimit, mangaupdates.getMangaOnPage, function(error, result){
-      return callback(error, _.flatten(result));
-    });
-  },
-  // get manga info
-  function(mangaIds, callback) {
-    mangaIds = mangaIds.slice(0, 5);
-    async.mapLimit(mangaIds, parallelismLimit, mangaupdates.getManga, function(error, result){
-      return callback(error, result);
-    });
-  },
-  // get manga cover
-  function(collection, callback) {
-    async.mapLimit(collection, parallelismLimit, function(manga, mangaCallback) {
-      mangacovers.getCover(manga.id, function(err, cover){
-        manga.cover = cover;
-        return mangaCallback(null, manga);
-      })
-    }, function(error, result){
-      return callback(error, result);
-    })
-  },
-  // write manga collection to file
-  function(collection, callback) {
-    fs.writeFile(program.file, JSON.stringify(collection, null, 4), function(err) {
-      if (err) return callback(error);
-      return callback(null, 'Manga collection saved successfully.');
-    });
-  }
-);
+fileStream = fs.createWriteStream(program.file);
+fileStream.write('[');
+writtenManga = 0;
 
 mangacovers.prepareCache( function(err, cacheIds) {
-  async.waterfall(operations,
-    function(err, result) {
-      if (err) {
-          console.error(err);
-          return process.exit(-1);
-      }
+  async.waterfall([
+    function(callback){
+      mangaupdates.getSourcePages(callback);
+    },
+    function(pages, callback){
+      //pages = pages.slice(0, 2);
+      //pages = pages.slice(49, 50);
+      async.eachSeries(pages, function(page, pageCallback){
+        // page processing
+        async.waterfall([
+          function(callback) {
+            mangaupdates.getMangaOnPage(page, callback);
+          },
+          // get manga info
+          function(mangaIds, callback) {
+            //mangaIds = mangaIds.slice(0, 3);
+            async.mapLimit(mangaIds, parallelismLimit, mangaupdates.getManga, function(error, result){
+              return callback(error, result);
+            });
+          },
+          // get manga cover
+          function(collection, callback) {
+            async.mapLimit(collection, parallelismLimit, function(manga, mangaCallback) {
+              mangacovers.getCover(manga.id, function(err, cover){
+                if (cover != null) {
+                  manga.cover = cover.normal;
+                  manga.thumbnail = cover.thumbnail;
+                }
+                return mangaCallback(null, manga);
+              })
+            }, function(error, result){
+              return callback(error, result);
+            })
+          },
+          // write manga collection to file
+          function(collection, callback) {
+            for (var i = 0, length = collection.length; i < length; ++i) {
+              json = JSON.stringify(collection[i]);
+              text = writtenManga == 0 ? json : ',' + json
+              fileStream.write(text);
+              ++writtenManga;
+            }
 
-      console.log(result);
-      return process.exit(0);
-    }
-  );
-});
+            return callback(null, 'Page processed successfully.');
+          }
+        ], function(error, result){
+          return pageCallback(error, result);
+        });
+        //----------------
+
+      }, function(error, result){
+        //console.log('page callback', error, result);
+        if (error) return callback(error);
+        return callback(null, 'Manga collection saved successfully.');
+      });
+    }], function(err, result) {
+      //console.log('manga finish', err, result);
+      fileStream.end(']', null, function(err, callback){
+        return process.exit(0);
+      });
+
+      if (err)
+        console.error(err);
+      else
+        console.log(result);
+    });
+
+  });
